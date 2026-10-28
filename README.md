@@ -26,24 +26,41 @@ The trade-off: charging early is safe but may use expensive grid power; waiting 
 | **PPO** (continuous) | 10 values in [−1, 1] — charging/discharging rate per bay | Policy-gradient agent learns a fine-grained rate for each car |
 | **Priority DQN** (discrete) — *own design* | 21 actions = idle, or one of 5 **priority rules** × 4 **fractions** (25/50/75/100 % of cars) | Instead of controlling 10 bays directly (impossibly large discrete space), the agent picks *which ranking rule* to apply (e.g. "battery deficit ÷ time left") and *how many* top-ranked cars to charge |
 
-Both use Stable-Baselines3 with an MLP policy. PPO was trained for 10 k steps, Priority DQN for 20 k steps.
+Both use Stable-Baselines3 with MLP policies.
 
-## Results (30 unseen scenarios, seeds 1000–1029)
+### Training protocol
 
-| Policy | Mean reward ↑ | Grid energy | Departure penalty |
+| | |
+|---|---|
+| Budget | 100,000 steps per agent (≈ 4,200 simulated days), equal for both |
+| Seeds | 3 independent training runs per agent |
+| Validation | 20 fixed days (seeds 500–519), scored every 5,000 steps; the best checkpoint is kept |
+| Test | 30 different days (seeds 1000–1029), used only for the final numbers below |
+
+## Results (30 held-out test days)
+
+| Policy | Mean reward ↑ | Grid energy (kWh/day) | Departure penalty |
 |---|---:|---:|---:|
-| **PPO** | **−29.16 ± 3.97** | 283.8 | 8.75 |
-| Priority DQN | −30.22 ± 3.36 | **194.5** | 16.99 |
-| Cheap-hours rule | −30.66 ± 3.54 | 442.4 | 0.00 |
-| Charge-all at max power | −31.22 ± 3.82 | 429.1 | 0.00 |
-| Chargym rule-based controller | −31.31 ± 3.57 | 426.0 | 0.00 |
-| No charging | −46.88 ± 4.82 | 0.0 | 46.88 |
+| **Priority DQN** (ours) | **−25.67 ± 2.82** | 361 | **3.94** |
+| PPO | −27.07 ± 3.17 | 280 | 7.92 |
+| Cheap-hours rule | −30.66 ± 3.54 | 442 | 0.00 |
+| Charge-all at max power | −31.22 ± 3.82 | 429 | 0.00 |
+| Chargym rule-based controller | −31.31 ± 3.57 | 426 | 0.00 |
+| No charging | −46.88 ± 4.82 | 0 | 46.88 |
 
-- **PPO is the best policy overall**, beating every baseline. Its advantage over Priority DQN is statistically significant (paired t-test p = 0.013, Wilcoxon p = 0.016; better on 23 / 30 days).
-- **Priority DQN uses 31 % less grid energy than PPO** (and ~55 % less than the rules), but leaves more cars under-charged — a different point on the cost-vs-satisfaction trade-off.
-- Rule-based policies always fully charge cars but buy much more grid electricity.
+RL rows are averaged over the 3 training seeds.
 
-Reproduce: `python training/compare_models.py` and `python training/evaluate_baselines.py`.
+- **Priority DQN is the best policy.** It beats PPO on 26 of 30 test days (paired t-test p < 10⁻⁶) and the best hand-written rule by 16%.
+- It learned to **buy 79% of its grid electricity off-peak**, when the tariff is half price (PPO: 59%).
+- **Equal, longer training changed the conclusion.** With the original budgets (PPO 10k steps, DQN 20k), PPO looked better (−29.16 vs −30.22). The learning curves show why: DQN only starts improving after ~25k steps, while PPO peaks early (~15k) and then drifts down, so best-checkpoint selection matters.
+
+Reproduce:
+
+```bash
+python training/train_v2.py --algo ppo --seed 0   # repeat for seeds 1, 2 and --algo dqn
+python training/evaluate_v2.py                     # test-set results + deployed models
+python training/evaluate_baselines.py
+```
 
 ## Dashboard
 
@@ -52,15 +69,16 @@ pip install -r requirements.txt
 streamlit run dashboard.py
 ```
 
-- **Home** — run PPO or Priority DQN for a 24-hour day (choose a seed so both models face the same day), battery curves, hour-by-hour playback, 30-scenario comparison and baselines
-- **Animated Simulation** — auto-playing animation of the agent's decisions
-- **Charging Station View** — per-bay view of the station at any hour
+- **Simulate a day:** run either agent on any day, compare it with the other agent on the same day, and watch the 10 charging bays fill hour by hour
+- **Results:** leaderboard against baselines, cost-versus-penalty trade-off, day-by-day head-to-head, learning curves
+- **How it works:** the MDP, reward, action design and training protocol
 
 ## Project structure
 
 ```
-├── dashboard.py                  Streamlit app (home page)
-├── pages/                        Extra Streamlit pages
+├── dashboard.py                  Streamlit entry point
+├── views/                        App pages (simulate, results, how it works)
+├── ui/theme.py                   Shared colours, charts and station visual
 ├── Chargym_Charging_Station/
 │   ├── envs/
 │   │   ├── Charging_Station_Enviroment.py   Simulator (from Chargym)
@@ -69,34 +87,27 @@ streamlit run dashboard.py
 │   ├── utils/                    Energy, arrivals and reward calculations
 │   └── Files/                    Weather data
 ├── training/
-│   ├── train_ppo.py / train_dqn.py          Training
+│   ├── train_v2.py / evaluate_v2.py         Main training + test evaluation
+│   ├── train_ppo.py / train_dqn.py          Original (v1) training
 │   ├── compare_models.py                    30-scenario RL evaluation
 │   ├── evaluate_baselines.py                Rule-based baselines
 │   └── live_simulation.py                   Single-day run used by the dashboard
-├── models/                       Trained models (final + checkpoints)
+├── models/v2/                    Retrained models (3 seeds each; *_final = deployed)
+├── models/ppo, dqn_priority/     Original v1 models
 ├── reports/                      Result CSVs and figures
 ├── tests/                        Smoke tests run in CI
 └── Solvers/                      Original Chargym example solvers (reference only)
 ```
 
-## Retrain
-
-```bash
-python training/train_ppo.py
-python training/train_dqn.py
-python training/compare_models.py
-python training/plot_comparison.py
-```
-
 ## Limitations and next steps
 
-- Short training budgets (10 k / 20 k steps ≈ 400–800 simulated days) and unequal between the two agents; longer, equal-budget training with several random seeds would make the comparison stronger.
+- One price schedule and one weather file. Training on randomised tariffs and seasons would test whether the agents generalise.
+- The grid has no capacity limit. A connection cap would make the scheduling problem harder and more realistic.
 - Priority DQN never discharges, so vehicle-to-grid (V2G) is only available to PPO.
-- One fixed price profile and one weather file; results may not transfer to other tariffs or seasons.
-- The grid has no capacity limit (an assumption of the simulator).
+- Next: reward shaping or a constrained formulation (for example, "every car must reach at least 90%"), plus SAC or TD3 for the continuous action space.
 
 ## Credits
 
 The charging-station simulator is based on **Chargym** by the ConvCAO research group (CERTH), MIT License — Karatzinis et al., *"Chargym: An EV Charging Station Model for Controller Benchmarking"*, AIAI 2022 ([paper](docs/Chargym_preprint_paper.pdf), [original repo](https://github.com/georkara/Chargym-Charging-Station)).
 
-This project adds: the Gymnasium wrapper, the priority-based DQN action design, the PPO/DQN training and evaluation pipeline, baseline benchmarking, and the interactive dashboard. Cross-platform fixes were also made to the simulator.
+This project adds: the Gymnasium wrapper, the priority-based DQN action design, the multi-seed training and validation/test evaluation protocol, baseline benchmarking, and the interactive dashboard. Cross-platform fixes were also made to the simulator.

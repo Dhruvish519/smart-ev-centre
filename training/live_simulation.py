@@ -18,11 +18,17 @@ from Chargym_Charging_Station.envs.dqn_wrapper import (
     ChargingDQNWrapper,
 )
 
+# Retrained models (training/train_v2.py + evaluate_v2.py) are used when
+# present; otherwise fall back to the original models.
+_V2 = ROOT / "models" / "v2"
 MODEL_PATHS = {
-    "PPO": ROOT / "models" / "ppo" / "charging_ppo_final.zip",
     "Priority DQN": (
-        ROOT / "models" / "dqn_priority"
-        / "charging_dqn_priority_final.zip"
+        _V2 / "dqn_final.zip" if (_V2 / "dqn_final.zip").exists()
+        else ROOT / "models" / "dqn_priority" / "charging_dqn_priority_final.zip"
+    ),
+    "PPO": (
+        _V2 / "ppo_final.zip" if (_V2 / "ppo_final.zip").exists()
+        else ROOT / "models" / "ppo" / "charging_ppo_final.zip"
     ),
 }
 
@@ -124,6 +130,9 @@ def run_live_simulation(model_name: str, seed=None):
 
             hourly_rows.append({
                 "hour": hour + 1,
+                "price": float(legacy.Energy["Price"][0, hour]),
+                "solar_kwh": float(legacy.Energy["Renewable"][0, hour]),
+                "evs_present": int(present.sum()),
                 "reward": float(reward),
                 "grid_energy": float(legacy.Grid_Evol[-1]),
                 "departure_penalty": float(

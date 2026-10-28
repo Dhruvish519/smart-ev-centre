@@ -118,7 +118,8 @@ class ChargingDQNWrapper(gym.Env):
                         1.0 + 1.0 / (time + 0.5)
                     )
 
-                ranked = candidates[np.argsort(-scores)]
+                # Stable sort: identical tie-breaking on every platform.
+                ranked = candidates[np.argsort(-scores, kind="stable")]
 
                 count = max(
                     1,

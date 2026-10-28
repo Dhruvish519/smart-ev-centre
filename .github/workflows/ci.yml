@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Compile all Python files
+        run: python -m compileall -q Chargym_Charging_Station training pages dashboard.py
+
+      - name: Run smoke tests
+        run: pytest -q tests
+
+      - name: Check the Streamlit app boots
+        run: |
+          streamlit run dashboard.py --server.headless true --server.port 8501 &
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8501/_stcore/health && exit 0
+            sleep 2
+          done
+          echo "Streamlit did not start" && exit 1

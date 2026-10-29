@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 from Chargym_Charging_Station.envs.gymnasium_wrapper import ChargingGymnasiumWrapper
 from Chargym_Charging_Station.envs.dqn_wrapper import ChargingDQNWrapper
-from training.live_simulation import run_live_simulation
+from training.live_simulation import MODEL_PATHS, run_live_simulation
 
 
 def test_env_episode_runs():
@@ -38,7 +38,11 @@ def test_dqn_wrapper_idle_action_is_recorded():
     assert env.last_action_vector.sum() == 0
 
 
-@pytest.mark.parametrize("model", ["PPO", "Priority DQN"])
+def test_all_three_agents_available():
+    assert {"PPO", "Priority DQN", "SAC"} <= set(MODEL_PATHS)
+
+
+@pytest.mark.parametrize("model", sorted(MODEL_PATHS))
 def test_trained_model_full_day(model):
     summary, hourly, ev = run_live_simulation(model, seed=1000)
     assert summary["hours_completed"] == 24

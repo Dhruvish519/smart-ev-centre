@@ -54,23 +54,34 @@ except Exception as exc:  # surface model/environment problems clearly
     st.stop()
 
 summary, hourly, ev = runs[model]
-other = [m for m in MODELS if m != model][0]
-o_summary, _, o_ev = runs[other]
 
 dep = departures(ev)
 full = int((dep >= 99.5).sum())
-o_full = int((departures(o_ev) >= 99.5).sum())
+
+# Every agent on this same day, for the comparison line under each stat.
+day = {}
+for m, (sm, _, e) in runs.items():
+    d = departures(e)
+    day[m] = dict(reward=sm["total_reward"], grid=sm["total_grid_energy"],
+                  full=int((d >= 99.5).sum()), n=len(d),
+                  penalty=sm["total_departure_penalty"])
+others = [m for m in MODELS if m != model]
+
+
+def vs(fmt):
+    return ", ".join(f"{m} {fmt(day[m])}" for m in others)
+
 
 st.write("")
 T.stat_row([
     ("Total reward", f"{summary['total_reward']:.2f}", T.INK,
-     f"{other}: {o_summary['total_reward']:.2f} on the same day"),
+     vs(lambda d: f"{d['reward']:.2f}")),
     ("Bought from grid", f"{summary['total_grid_energy']:.0f} kWh", T.GRID,
-     f"{other}: {o_summary['total_grid_energy']:.0f} kWh"),
+     vs(lambda d: f"{d['grid']:.0f}")),
     ("Cars leaving full", f"{full} / {len(dep)}", T.BATTERY,
-     f"{other}: {o_full} / {len(departures(o_ev))}"),
+     vs(lambda d: f"{d['full']}/{d['n']}")),
     ("Departure penalty", f"{summary['total_departure_penalty']:.2f}", T.PENALTY,
-     f"{other}: {o_summary['total_departure_penalty']:.2f}"),
+     vs(lambda d: f"{d['penalty']:.2f}")),
 ])
 st.markdown(
     '<p class="ev-note">Reward = −(grid cost + penalty for under-charged '

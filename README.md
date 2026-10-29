@@ -2,7 +2,7 @@
 
 Reinforcement-learning agents that decide **which electric vehicles to charge, and how hard, every hour of the day** at a 10-bay charging station with solar power and time-of-use electricity prices.
 
-The goal is to **minimise the cost of grid electricity** while making sure every car **leaves with a full battery**. Two RL agents are trained and compared against hand-written rules on the same 30 simulated days, and an interactive Streamlit dashboard lets you watch the trained agents make decisions hour by hour.
+The goal is to **minimise the cost of grid electricity** while making sure every car **leaves with a full battery**. Three RL algorithms (PPO, SAC and a priority-based DQN) are trained and compared against hand-written rules on the same 30 simulated days, and an interactive Streamlit dashboard lets you watch the trained agents make decisions hour by hour.
 
 [![CI](https://github.com/Dhruvish519/smart-ev-centre/actions/workflows/ci.yml/badge.svg)](https://github.com/Dhruvish519/smart-ev-centre/actions/workflows/ci.yml)
 
@@ -25,6 +25,7 @@ The trade-off: charging early is safe but may use expensive grid power; waiting 
 |---|---|---|
 | **PPO** (continuous) | 10 values in [−1, 1] — charging/discharging rate per bay | Policy-gradient agent learns a fine-grained rate for each car |
 | **Priority DQN** (discrete) — *own design* | 21 actions = idle, or one of 5 **priority rules** × 4 **fractions** (25/50/75/100 % of cars) | Instead of controlling 10 bays directly (impossibly large discrete space), the agent picks *which ranking rule* to apply (e.g. "battery deficit ÷ time left") and *how many* top-ranked cars to charge |
+| **SAC** (continuous) | 10 values in [−1, 1], same as PPO | Off-policy maximum-entropy actor-critic with a replay buffer; uses **8-step returns** so the delayed departure penalty reaches the decision that caused it |
 
 Both use Stable-Baselines3 with MLP policies.
 
@@ -41,7 +42,8 @@ Both use Stable-Baselines3 with MLP policies.
 
 | Policy | Mean reward ↑ | Grid energy (kWh/day) | Departure penalty |
 |---|---:|---:|---:|
-| **Priority DQN** (ours) | **−25.67 ± 2.82** | 361 | **3.94** |
+| **SAC** (8-step) | **−24.28 ± 2.94** | 280 | 6.95 |
+| Priority DQN (ours) | −25.67 ± 2.82 | 361 | **3.94** |
 | PPO | −27.07 ± 3.17 | 280 | 7.92 |
 | Cheap-hours rule | −30.66 ± 3.54 | 442 | 0.00 |
 | Charge-all at max power | −31.22 ± 3.82 | 429 | 0.00 |
@@ -50,16 +52,26 @@ Both use Stable-Baselines3 with MLP policies.
 
 RL rows are averaged over the 3 training seeds.
 
-- **Priority DQN is the best policy.** It beats PPO on 26 of 30 test days (paired t-test p < 10⁻⁶) and the best hand-written rule by 16%.
-- It learned to **buy 79% of its grid electricity off-peak**, when the tariff is half price (PPO: 59%).
-- **Equal, longer training changed the conclusion.** With the original budgets (PPO 10k steps, DQN 20k), PPO looked better (−29.16 vs −30.22). The learning curves show why: DQN only starts improving after ~25k steps, while PPO peaks early (~15k) and then drifts down, so best-checkpoint selection matters.
+| Head-to-head (30 test days) | Days won | Paired t-test |
+|---|---:|---:|
+| SAC vs Priority DQN | 26 / 30 | p = 4 × 10⁻⁸ |
+| SAC vs PPO | 30 / 30 | p = 4 × 10⁻¹⁸ |
+| Priority DQN vs PPO | 26 / 30 | p = 8 × 10⁻⁷ |
+
+- **SAC is the best algorithm**, 21% better than the best hand-written rule. It buys as little grid energy as PPO but leaves fewer cars under-charged. All 3 SAC training seeds beat all 3 DQN seeds.
+- **Priority DQN is the most "comfortable" agent.** It has the lowest departure penalty and buys 79% of its grid electricity off-peak (PPO: 59%), but it pays for that with more grid energy.
+- **Standard SAC failed (an ablation).** With 1-step targets it plateaued around −40: it learned to drain energy from parked cars to charge others (vehicle-to-grid), dodging the grid bill, and the penalty only arrived hours later when those cars left. **8-step returns** fixed it (graph 7).
+- **Equal, longer training changed the conclusion.** With the original budgets (PPO 10k steps, DQN 20k), PPO looked better than DQN. The learning curves show why: DQN only starts improving after ~25k steps.
+
+Comparison graphs for slides are in [`reports/algorithm_comparison/`](reports/algorithm_comparison/) (leaderboard, per-metric bars, reward distribution, learning curves, trade-off, head-to-head, SAC ablation).
 
 Reproduce:
 
 ```bash
-python training/train_v2.py --algo ppo --seed 0   # repeat for seeds 1, 2 and --algo dqn
+python training/train_v2.py --algo ppo --seed 0   # repeat for seeds 1, 2 and --algo dqn / sac
 python training/evaluate_v2.py                     # test-set results + deployed models
 python training/evaluate_baselines.py
+python training/plot_algorithm_comparison.py     # graphs in reports/algorithm_comparison/
 ```
 
 ## Dashboard
@@ -103,8 +115,8 @@ streamlit run dashboard.py
 
 - One price schedule and one weather file. Training on randomised tariffs and seasons would test whether the agents generalise.
 - The grid has no capacity limit. A connection cap would make the scheduling problem harder and more realistic.
-- Priority DQN never discharges, so vehicle-to-grid (V2G) is only available to PPO.
-- Next: reward shaping or a constrained formulation (for example, "every car must reach at least 90%"), plus SAC or TD3 for the continuous action space.
+- Priority DQN never discharges, so vehicle-to-grid (V2G) is only available to PPO and SAC.
+- Next: reward shaping or a constrained formulation (for example, "every car must reach at least 90%"), plus TD3 or n-step PPO/SAC variants with a constrained charging target.
 
 ## Credits
 

@@ -1,0 +1,19 @@
+algo,seed,timesteps,val_mean_reward
+"SAC (1-step, standard)",0,0,-42.487
+"SAC (1-step, standard)",0,5000,-70.883
+"SAC (1-step, standard)",0,10000,-43.995
+"SAC (1-step, standard)",0,15000,-49.665
+"SAC (1-step, standard)",0,20000,-46.664
+"SAC (1-step, standard)",0,25000,-44.667
+"SAC (1-step, standard)",0,30000,-44.364
+"SAC (1-step, standard)",0,35000,-44.644
+"SAC (1-step, standard)",0,40000,-41.698
+"SAC (1-step, standard)",1,0,-44.903
+"SAC (1-step, standard)",1,5000,-79.519
+"SAC (1-step, standard)",1,10000,-41.33
+"SAC (1-step, standard)",1,15000,-40.152
+"SAC (1-step, standard)",1,20000,-40.593
+"SAC (1-step, standard)",1,25000,-39.767
+"SAC (1-step, standard)",1,30000,-39.043
+"SAC (1-step, standard)",1,35000,-39.344
+"SAC (1-step, standard)",1,40000,-43.049

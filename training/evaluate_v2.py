@@ -17,15 +17,14 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from stable_baselines3 import DQN, PPO
+from stable_baselines3 import DQN, PPO, SAC
 
 from training.compare_models import NUM_SCENARIOS, START_SEED
-from training.train_v2 import make_env
+from training.train_v2 import NAMES, make_env
 
 MODEL_DIR = ROOT / "models" / "v2"
 CURVE_DIR = ROOT / "reports" / "learning_curves"
 OUT = ROOT / "reports" / "v2_comparison.csv"
-NAMES = {"ppo": "PPO", "dqn": "Priority DQN"}
 
 
 def run_day(model, algo, seed):
@@ -45,7 +44,7 @@ def run_day(model, algo, seed):
 
 def main():
     rows = []
-    for algo, cls in (("ppo", PPO), ("dqn", DQN)):
+    for algo, cls in (("ppo", PPO), ("dqn", DQN), ("sac", SAC)):
         best_val, best_path = -np.inf, None
         for path in sorted(MODEL_DIR.glob(f"{algo}_seed*_best.zip")):
             train_seed = int(path.stem.split("seed")[1].split("_")[0])

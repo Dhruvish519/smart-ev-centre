@@ -1,0 +1,5 @@
+model,val_mean_reward
+Charge-all (max power),-30.751547359159684
+Rule-based (Chargym RBC),-30.058398887624634
+Cheap-hours rule,-29.40509904182695
+No charging,-45.84362

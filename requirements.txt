@@ -1,7 +1,7 @@
 # CPU-only PyTorch keeps installs small and fast (no CUDA download).
 --extra-index-url https://download.pytorch.org/whl/cpu
 torch>=2.2
-stable-baselines3>=2.3,<3
+stable-baselines3==2.9.2  # n-step SAC needs >=2.6
 gymnasium>=0.29,<2
 numpy>=1.26
 scipy>=1.11

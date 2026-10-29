@@ -4,7 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO, DQN, SAC
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -30,7 +30,13 @@ MODEL_PATHS = {
         _V2 / "ppo_final.zip" if (_V2 / "ppo_final.zip").exists()
         else ROOT / "models" / "ppo" / "charging_ppo_final.zip"
     ),
+    "SAC": _V2 / "sac_final.zip",
 }
+# Only offer agents whose trained model is actually present.
+MODEL_PATHS = {name: path for name, path in MODEL_PATHS.items() if path.exists()}
+
+# Continuous-action agents act directly on per-bay charging rates.
+CONTINUOUS = {"PPO": PPO, "SAC": SAC}
 
 
 def run_live_simulation(model_name: str, seed=None):
@@ -50,9 +56,9 @@ def run_live_simulation(model_name: str, seed=None):
             f"Trained model not found: {model_path}"
         )
 
-    if model_name == "PPO":
+    if model_name in CONTINUOUS:
         env = ChargingGymnasiumWrapper()
-        model = PPO.load(str(model_path), device="cpu")
+        model = CONTINUOUS[model_name].load(str(model_path), device="cpu")
     else:
         env = ChargingDQNWrapper()
         model = DQN.load(str(model_path), device="cpu")
@@ -103,7 +109,7 @@ def run_live_simulation(model_name: str, seed=None):
                 deterministic=True,
             )
 
-            if model_name == "PPO":
+            if model_name in CONTINUOUS:
                 action_vector = np.asarray(
                     policy_action,
                     dtype=float,

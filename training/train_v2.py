@@ -1,7 +1,7 @@
 """Improved training protocol (v2).
 
 Compared with train_ppo.py / train_dqn.py this script:
-  * gives both agents the SAME budget (default 100k steps),
+  * gives every agent (PPO, Priority DQN, SAC) the SAME budget (default 100k steps),
   * trains several independent random seeds,
   * evaluates on fixed *validation* days during training, giving a
     learning curve (reports/learning_curves.csv),
@@ -12,6 +12,7 @@ Compared with train_ppo.py / train_dqn.py this script:
 Usage:
     python training/train_v2.py --algo ppo --seed 0
     python training/train_v2.py --algo dqn --seed 0 --steps 100000
+    python training/train_v2.py --algo sac --seed 0
 """
 import argparse
 import sys
@@ -25,7 +26,7 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from stable_baselines3 import DQN, PPO
+from stable_baselines3 import DQN, PPO, SAC
 from stable_baselines3.common.callbacks import BaseCallback
 
 from Chargym_Charging_Station.envs.dqn_wrapper import ChargingDQNWrapper
@@ -33,11 +34,13 @@ from Chargym_Charging_Station.envs.gymnasium_wrapper import ChargingGymnasiumWra
 
 VALIDATION_SEEDS = list(range(500, 520))  # disjoint from test seeds 1000-1029
 MODEL_DIR = ROOT / "models" / "v2"
+NAMES = {"ppo": "PPO", "dqn": "Priority DQN", "sac": "SAC"}
 CURVE_DIR = ROOT / "reports" / "learning_curves"
 
 
 def make_env(algo):
-    return ChargingGymnasiumWrapper() if algo == "ppo" else ChargingDQNWrapper()
+    # PPO and SAC control continuous per-bay rates; DQN uses priority actions.
+    return ChargingDQNWrapper() if algo == "dqn" else ChargingGymnasiumWrapper()
 
 
 def evaluate(model, algo, seeds):
@@ -78,7 +81,7 @@ class ValidationCallback(BaseCallback):
     def _record(self):
         mean, std = evaluate(self.model, self.algo, VALIDATION_SEEDS)
         self.rows.append({
-            "algo": self.algo.upper() if self.algo == "ppo" else "Priority DQN",
+            "algo": NAMES[self.algo],
             "seed": self.seed,
             "timesteps": self.num_timesteps,
             "val_mean_reward": mean,
@@ -107,6 +110,20 @@ def build(algo, env, seed):
             gamma=0.99, gae_lambda=0.95, ent_coef=0.0,
             seed=seed, device="cpu", verbose=0,
         )
+    if algo == "sac":
+        # Off-policy, maximum-entropy actor-critic for continuous actions.
+        # n_steps=8: the departure penalty arrives hours after the charging
+        # decision that caused it. With standard 1-step targets SAC learned to
+        # shuffle energy between cars (V2G) to avoid grid cost and never
+        # connected that to the later penalty (reports/ablation/). 8-step
+        # returns propagate the penalty back to the decision much faster.
+        return SAC(
+            "MlpPolicy", env,
+            learning_rate=3e-4, buffer_size=100_000, learning_starts=2_000,
+            batch_size=256, tau=0.005, gamma=0.99, train_freq=1,
+            gradient_steps=1, ent_coef="auto", n_steps=8,
+            seed=seed, device="cpu", verbose=0,
+        )
     return DQN(
         "MlpPolicy", env,
         learning_rate=5e-4, buffer_size=50_000, learning_starts=2_000,
@@ -118,7 +135,7 @@ def build(algo, env, seed):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--algo", choices=["ppo", "dqn"], required=True)
+    parser.add_argument("--algo", choices=["ppo", "dqn", "sac"], required=True)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=100_000)
     parser.add_argument("--eval-freq", type=int, default=5_000)

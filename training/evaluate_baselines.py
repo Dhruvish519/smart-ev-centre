@@ -100,6 +100,13 @@ def main():
             })
     df = pd.DataFrame(rows)
     df.to_csv(OUTPUT_PATH, index=False)
+
+    # Same baselines on the validation days used for learning curves,
+    # so curves can show when an agent starts beating the rules.
+    val = [{"model": name, "val_mean_reward": float(np.mean(
+        [run(policy, seed)[0] for seed in range(500, 520)]))}
+        for name, policy in BASELINES.items()]
+    pd.DataFrame(val).to_csv(OUTPUT_PATH.parent / "baseline_validation.csv", index=False)
     print(df.groupby("model")[["total_reward", "grid_energy", "departure_penalty"]]
           .agg(["mean", "std"]).round(2).to_string())
     print(f"\nSaved to {OUTPUT_PATH}")

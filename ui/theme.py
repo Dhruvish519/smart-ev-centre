@@ -22,7 +22,7 @@ BATTERY = "#12A08A"
 PENALTY = "#D1495B"
 RULE = "#A7B1C2"
 
-MODEL_COLORS = {"PPO": GRID, "Priority DQN": BATTERY}
+MODEL_COLORS = {"PPO": GRID, "Priority DQN": BATTERY, "SAC": "#C2410C"}
 
 FONT = "Barlow, system-ui, sans-serif"
 
